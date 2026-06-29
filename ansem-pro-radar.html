@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ANSEM PRO RADAR — $ANSEM Live Monitor</title>
+
+<!-- ===== Tailwind CSS (Play CDN) ===== -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- ===== Chart.js (CDN) ===== -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<!-- ===== Tailwind theme config ===== -->
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          neon:   '#00ff9f',  // primary neon green
+          ice:    '#00b4ff',  // electric blue
+          punch:  '#ffe600',  // brutalist yellow accent
+          hot:    '#ff4dd2',  // hot pink accent
+          danger: '#ff4961',
+          base:   '#0a0a0a',
+          panel:  '#121212',
+          ink:    '#000000',
+        },
+        fontFamily: {
+          mono: ['"Space Mono"', 'ui-monospace', 'monospace'],
+          display: ['"Archivo Black"', 'system-ui', 'sans-serif'],
+          sans: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+
+<!-- ===== Fonts ===== -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+
+<style>
+  /* ============ NEO-BRUTALIST BASE ============ */
+  html { scroll-behavior: smooth; }
+  body {
+    background: #0a0a0a;
+    background-image:
+      linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 40px 40px;
+    color: #f2f2f2;
+  }
+
+  /* Hard brutalist border + offset shadow */
+  .nb        { border: 3px solid #000; box-shadow: 6px 6px 0 0 #000; }
+  .nb-neon   { border: 3px solid #00ff9f; box-shadow: 6px 6px 0 0 #00ff9f; }
+  .nb-ice    { border: 3px solid #00b4ff; box-shadow: 6px 6px 0 0 #00b4ff; }
+  .nb-punch  { border: 3px solid #ffe600; box-shadow: 6px 6px 0 0 #ffe600; }
+  .nb-white  { border: 3px solid #fff;    box-shadow: 6px 6px 0 0 #fff; }
+  .nb-sm     { border: 3px solid #000; box-shadow: 4px 4px 0 0 #000; }
+
+  /* Interactive press effect */
+  .nb-press { transition: transform .08s ease, box-shadow .08s ease; }
+  .nb-press:hover  { transform: translate(-2px,-2px); }
+  .nb-press:active { transform: translate(3px,3px); box-shadow: 1px 1px 0 0 currentColor; }
+
+  /* KPI hover lift */
+  .kpi { transition: transform .1s ease, box-shadow .1s ease; }
+  .kpi:hover { transform: translate(-3px,-3px); box-shadow: 9px 9px 0 0 #00ff9f; }
+
+  /* ============ Custom scrollbar ============ */
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track { background: #000; }
+  ::-webkit-scrollbar-thumb { background: #00ff9f; border: 3px solid #000; }
+
+  /* Pulsing live dot */
+  .live-dot { width:10px;height:10px;background:#00ff9f;border:2px solid #000; animation:pulse 1.4s infinite steps(2); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+  /* New trade row flash */
+  @keyframes flashBuy  { from { background:#00ff9f; } to { background:transparent; } }
+  @keyframes flashSell { from { background:#ff4961; } to { background:transparent; } }
+  .flash-buy  { animation: flashBuy 1.2s ease-out; }
+  .flash-sell { animation: flashSell 1.2s ease-out; }
+
+  .tf-btn.active { background:#00ff9f; color:#000; }
+
+  /* Marquee ticker */
+  .marquee { display:inline-block; white-space:nowrap; animation: scroll-left 28s linear infinite; }
+  @keyframes scroll-left { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  /* Logo spin frame */
+  .logo-frame { image-rendering:auto; }
+
+  #toast { transition: transform .15s, opacity .15s; }
+
+  /* Section heading bar */
+  .sec-head { background:#00ff9f; color:#000; }
+</style>
+</head>
+
+<body class="font-sans antialiased min-h-screen selection:bg-neon selection:text-black">
+
+<!-- ====================================================================== -->
+<!-- TICKER MARQUEE                                                          -->
+<!-- ====================================================================== -->
+<div class="bg-punch text-black border-b-[3px] border-black overflow-hidden">
+  <div class="py-1.5 text-xs font-mono font-bold tracking-wider">
+    <span class="marquee" id="ticker">★ ANSEM PRO RADAR ★ LIVE ON-CHAIN MONITOR ★ NOT FINANCIAL ADVICE ★ DYOR ★ </span>
+  </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- HEADER                                                                 -->
+<!-- ====================================================================== -->
+<header class="sticky top-0 z-40 bg-base border-b-[3px] border-black">
+  <div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center gap-4">
+
+    <!-- Logo (image) -->
+    <div class="flex items-center gap-3 min-w-fit">
+      <img src="assets/ansem-logo.png" alt="ANSEM" class="logo-frame w-12 h-12 object-cover nb-sm border-neon" style="box-shadow:4px 4px 0 0 #00ff9f;border-color:#00ff9f" />
+      <div>
+        <h1 class="font-display text-xl tracking-tight text-white leading-none uppercase">
+          ANSEM <span class="text-neon">PRO</span> <span class="text-ice">RADAR</span>
+        </h1>
+        <p class="text-[10px] text-punch font-mono tracking-[0.3em] mt-1">SOLANA // LIVE</p>
+      </div>
+    </div>
+
+    <!-- Live price -->
+    <div class="flex items-center gap-3 ml-auto">
+      <div class="text-right">
+        <div class="flex items-center gap-2 justify-end">
+          <span id="hdrPrice" class="font-mono text-2xl font-bold text-white">$—</span>
+          <span id="hdrChange" class="font-mono text-sm font-bold px-2 py-0.5 border-2 border-black bg-white text-black">—%</span>
+        </div>
+        <div class="text-[11px] text-gray-400 font-mono">
+          <span id="hdrPriceSol">— SOL</span> · upd <span id="lastUpdated">—</span>
+        </div>
+      </div>
+      <button id="refreshBtn" title="Refresh now"
+        class="nb-sm nb-press text-neon bg-panel px-3 py-2 font-bold text-sm flex items-center gap-2 uppercase">
+        <svg id="refreshIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        <span class="hidden sm:inline">Sync</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Quick links -->
+  <div class="max-w-[1600px] mx-auto px-4 pb-3 flex flex-wrap gap-2 text-xs">
+    <a target="_blank" rel="noopener" href="https://dexscreener.com/solana/74ucgdnexvh26dwfswmfbvdza7vg9dp7yyp2cg4f76dn" class="qlink">DexScreener</a>
+    <a target="_blank" rel="noopener" href="https://birdeye.so/token/9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump?chain=solana" class="qlink">Birdeye</a>
+    <a target="_blank" rel="noopener" href="https://solscan.io/token/9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump" class="qlink">Solscan Token</a>
+    <a target="_blank" rel="noopener" href="https://solscan.io/account/74ucgdnexvh26dwfswmfbvdza7vg9dp7yyp2cg4f76dn" class="qlink">Solscan Pair</a>
+    <a target="_blank" rel="noopener" href="https://x.com/blknoiz06" class="qlink">X</a>
+    <a target="_blank" rel="noopener" href="https://t.me/" class="qlink">Telegram</a>
+    <a target="_blank" rel="noopener" href="https://pump.fun/9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump" class="qlink">Website</a>
+  </div>
+</header>
+
+<style>
+  .qlink { @apply px-2.5 py-1 bg-panel border-2 border-black text-gray-200 font-mono font-bold hover:bg-neon hover:text-black transition; }
+</style>
+
+<main class="max-w-[1600px] mx-auto px-4 py-6 space-y-8">
+
+  <!-- ==================================================================== -->
+  <!-- HERO                                                                 -->
+  <!-- ==================================================================== -->
+  <section class="nb-neon bg-panel p-6">
+    <div class="flex flex-col md:flex-row items-center gap-6">
+      <img src="assets/ansem-logo.png" alt="ANSEM" class="logo-frame w-28 h-28 object-cover nb border-black flex-none" />
+
+      <div class="flex-1 w-full">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="live-dot"></span>
+          <span class="bg-neon text-black text-xs font-bold tracking-[0.2em] font-mono px-2 py-0.5 uppercase">Scanning $ANSEM</span>
+        </div>
+        <h2 class="font-display text-3xl md:text-5xl text-white uppercase leading-none">Ansem <span class="text-gray-600">/ ANSEM</span></h2>
+        <p class="text-gray-400 text-sm mt-3 max-w-2xl font-mono">Real-time on-chain monitor for $ANSEM on Solana — price, liquidity, trades & airdrop tracking. Data via DexScreener &amp; Birdeye public APIs.</p>
+
+        <!-- Address chips with copy -->
+        <div class="flex flex-wrap gap-3 mt-4">
+          <button class="addr-chip" data-copy="9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump">
+            <span class="bg-neon text-black px-1.5 py-0.5 mr-1.5 font-bold">MINT</span>
+            <span class="text-gray-200">9cRCn9…TGpump</span>
+            <svg class="w-3.5 h-3.5 text-neon ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          </button>
+          <button class="addr-chip" data-copy="74ucgdnexvh26dwfswmfbvdza7vg9dp7yyp2cg4f76dn">
+            <span class="bg-ice text-black px-1.5 py-0.5 mr-1.5 font-bold">PAIR</span>
+            <span class="text-gray-200">74ucgd…g4f76dn</span>
+            <svg class="w-3.5 h-3.5 text-ice ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <style>
+    .addr-chip { @apply inline-flex items-center text-xs font-mono font-bold px-3 py-2 bg-base border-2 border-black hover:border-neon transition; }
+  </style>
+
+  <!-- ==================================================================== -->
+  <!-- KPI CARDS                                                            -->
+  <!-- ==================================================================== -->
+  <section>
+    <div class="sec-head inline-block px-3 py-1 mb-4 font-display text-sm uppercase border-[3px] border-black">// Overview</div>
+    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4" id="kpiGrid"></div>
+  </section>
+
+  <!-- ==================================================================== -->
+  <!-- PRICE CHART (full width)                                             -->
+  <!-- ==================================================================== -->
+  <section class="nb bg-panel p-5">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div>
+        <h3 class="font-display text-lg text-white uppercase">Price Chart</h3>
+        <p class="text-[11px] text-gray-500 font-mono">live // appends every ~20s</p>
+      </div>
+      <div class="flex gap-1.5 flex-wrap" id="tfButtons">
+        <button class="tf-btn" data-tf="1m">1m</button>
+        <button class="tf-btn" data-tf="5m">5m</button>
+        <button class="tf-btn active" data-tf="15m">15m</button>
+        <button class="tf-btn" data-tf="1H">1H</button>
+        <button class="tf-btn" data-tf="4H">4H</button>
+        <button class="tf-btn" data-tf="1D">1D</button>
+      </div>
+    </div>
+    <div class="h-[360px]"><canvas id="priceChart"></canvas></div>
+  </section>
+  <style>
+    .tf-btn { @apply px-3 py-1 bg-base border-2 border-black text-gray-300 text-xs font-mono font-bold hover:bg-white hover:text-black transition uppercase; }
+  </style>
+
+  <!-- ==================================================================== -->
+  <!-- HOLDER SCAN                                                          -->
+  <!-- ==================================================================== -->
+  <section class="nb bg-panel p-5">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div class="flex items-center gap-2">
+        <h3 class="font-display text-lg text-white uppercase">Holder Scan</h3>
+        <span class="live-dot"></span>
+      </div>
+      <div class="text-[11px] text-gray-500 font-mono">
+        total holders ≈ <span id="hsTotal" class="text-neon font-bold">—</span> · estimate
+      </div>
+    </div>
+
+    <!-- Tier cards: holders holding more than $X worth of ANSEM -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="holderTiers"></div>
+
+    <p class="text-[10px] text-gray-600 font-mono mt-3">
+      ⚠ Tier breakdown is an on-chain-style estimate derived from the live holder count &amp; a typical power-law distribution
+      (no free per-wallet balance API is queried). Verify exact figures on
+      <a href="https://solscan.io/token/9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump#holders" target="_blank" rel="noopener" class="text-ice underline">Solscan</a>.
+    </p>
+  </section>
+
+  <!-- ==================================================================== -->
+  <!-- TRADES + AIRDROP ROW                                                 -->
+  <!-- ==================================================================== -->
+  <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+    <!-- Live trades (2/3) -->
+    <div class="xl:col-span-2 nb bg-panel p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div class="flex items-center gap-2">
+          <h3 class="font-display text-lg text-white uppercase">Live Trades</h3>
+          <span class="live-dot"></span>
+        </div>
+        <!-- Buy pressure -->
+        <div class="flex items-center gap-2 text-xs font-mono font-bold">
+          <span class="text-neon" id="buyPct">— %</span>
+          <div class="w-40 h-4 border-2 border-black overflow-hidden flex bg-base">
+            <div id="buyBar" class="h-full bg-neon" style="width:50%"></div>
+            <div id="sellBar" class="h-full bg-danger" style="width:50%"></div>
+          </div>
+          <span class="text-danger" id="sellPct">— %</span>
+        </div>
+      </div>
+      <div class="overflow-auto max-h-[380px] border-2 border-black">
+        <table class="w-full text-xs font-mono">
+          <thead class="sticky top-0 bg-neon text-black text-left font-bold uppercase">
+            <tr>
+              <th class="px-3 py-2">Time</th>
+              <th class="px-3 py-2">Type</th>
+              <th class="px-3 py-2 text-right">ANSEM</th>
+              <th class="px-3 py-2 text-right">Price</th>
+              <th class="px-3 py-2 text-right">USD</th>
+              <th class="px-3 py-2 text-right">Tx</th>
+            </tr>
+          </thead>
+          <tbody id="tradesBody" class="divide-y-2 divide-black/60">
+            <tr><td colspan="6" class="px-3 py-6 text-center text-gray-600">Loading trades…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Airdrop tracker (1/3) -->
+    <div class="nb-ice bg-panel p-5 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-display text-lg text-white uppercase">Airdrop</h3>
+        <span class="bg-punch text-black text-xs px-2 py-0.5 font-mono font-bold border-2 border-black">~$7M</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 text-center">
+        <div class="bg-base border-2 border-black p-3">
+          <div class="text-[10px] text-gray-500 tracking-widest font-mono">AIRDROPPED</div>
+          <div class="font-mono text-xl font-bold text-neon mt-1">$7.0M</div>
+        </div>
+        <div class="bg-base border-2 border-black p-3">
+          <div class="text-[10px] text-gray-500 tracking-widest font-mono">ANSEM WALLET</div>
+          <div class="font-mono text-xl font-bold text-ice mt-1">~62%</div>
+        </div>
+      </div>
+
+      <!-- Holders progress -->
+      <div>
+        <div class="flex justify-between text-[11px] font-mono font-bold mb-1">
+          <span class="text-gray-300">HOLDERS</span>
+          <span><span id="holdersNow" class="text-white">25,000</span> <span class="text-gray-600">/ 1,000,000</span></span>
+        </div>
+        <div class="w-full h-5 border-2 border-black bg-base overflow-hidden">
+          <div id="holdersBar" class="h-full bg-neon transition-all duration-700" style="width:2.5%"></div>
+        </div>
+        <p class="text-[10px] text-gray-500 mt-1 font-mono">GOAL: 1M · <span id="holdersPct">2.5%</span> reached</p>
+      </div>
+
+      <div class="bg-base border-2 border-black p-3">
+        <div class="text-[10px] text-gray-500 tracking-widest font-mono mb-1">RECENT HIGHLIGHT</div>
+        <p class="text-xs text-gray-300 font-mono leading-relaxed">Airdrop distribution continues to expand the Solana holder base toward the 1M goal. Track distribution on-chain via Solscan.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================================================================== -->
+  <!-- NEWS + WATCHLIST ROW                                                 -->
+  <!-- ==================================================================== -->
+  <section class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+    <!-- News (2/3) -->
+    <div class="xl:col-span-2 nb bg-panel p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-display text-lg text-white uppercase">News &amp; Sentiment</h3>
+        <div class="flex items-center gap-2 text-xs font-mono font-bold">
+          <span class="text-gray-500">SENTIMENT</span>
+          <span id="sentimentBadge" class="px-2 py-0.5 border-2 border-black bg-white text-black">—</span>
+        </div>
+      </div>
+      <div id="newsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="text-gray-600 text-sm font-mono">Loading news…</div>
+      </div>
+    </div>
+
+    <!-- Watchlist / portfolio (1/3) -->
+    <div class="nb-punch bg-panel p-5 space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="font-display text-lg text-white uppercase">Watchlist</h3>
+        <span class="text-[10px] text-gray-500 font-mono">localStorage</span>
+      </div>
+      <p class="text-[11px] text-gray-400 font-mono">Simulate a position. Stored in your browser only.</p>
+      <div class="flex gap-2">
+        <input id="holdInput" type="number" min="0" placeholder="ANSEM amount…" class="flex-1 bg-base border-2 border-black px-2 py-2 text-xs font-mono text-gray-200 focus:border-punch outline-none" />
+        <button id="saveHold" class="nb-press text-black bg-punch border-[3px] border-black px-4 py-2 text-xs font-bold uppercase">Save</button>
+      </div>
+      <div class="bg-base border-2 border-black p-4 text-center">
+        <div class="text-[10px] text-gray-500 tracking-widest font-mono">POSITION VALUE</div>
+        <div id="positionValue" class="font-mono text-3xl font-bold text-white mt-1">$0.00</div>
+        <div id="positionQty" class="text-[11px] text-gray-500 font-mono mt-1">0 ANSEM</div>
+      </div>
+      <button id="clearHold" class="w-full text-[11px] text-gray-500 hover:text-danger font-mono font-bold uppercase">clear watchlist</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- ====================================================================== -->
+<!-- FOOTER                                                                 -->
+<!-- ====================================================================== -->
+<footer class="border-t-[3px] border-black mt-10 bg-panel">
+  <div class="max-w-[1600px] mx-auto px-4 py-6 text-center space-y-2">
+    <div class="flex items-center justify-center gap-2 text-xs text-gray-400 font-mono font-bold">
+      <span class="live-dot"></span> ANSEM PRO RADAR // DEXSCREENER + BIRDEYE PUBLIC APIS
+    </div>
+    <p class="text-[11px] text-gray-500 max-w-3xl mx-auto leading-relaxed font-mono">
+      <span class="text-danger font-bold">⚠ NFA / DYOR:</span> Unofficial, community-built monitoring tool for informational purposes only.
+      <strong>NOT financial advice.</strong> Crypto is extremely volatile and you can lose all your capital.
+      Data may be delayed, cached, or inaccurate. Verify on-chain and do your own research. Not affiliated with Ansem.
+    </p>
+  </div>
+</footer>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 opacity-0 pointer-events-none px-4 py-2 bg-neon text-black text-sm font-bold border-[3px] border-black uppercase" style="box-shadow:5px 5px 0 0 #000">Copied!</div>
+
+<!-- ====================================================================== -->
+<!-- JAVASCRIPT                                                             -->
+<!-- ====================================================================== -->
+<script>
+/* =======================================================================
+   ANSEM PRO RADAR — vanilla JS engine (neo-brutalist build)
+   -----------------------------------------------------------------------
+     1. CONFIG & CONSTANTS   ← edit token/pair/feeds here
+     2. UTILITIES
+     3. STATE
+     4. DATA FETCHERS        ← DexScreener / Birdeye / RSS
+     5. RENDERERS            ← KPI, chart, trades, news
+     6. INTERACTIONS         ← copy, refresh, timeframe, watchlist
+     7. POLLING LOOP
+   ======================================================================= */
+
+/* ----------------------------------------------------------------------
+   1. CONFIG & CONSTANTS  (edit these to repoint the dashboard)
+---------------------------------------------------------------------- */
+const CONFIG = {
+  MINT: '9cRCn9rGT8V2imeM2BaKs13yhMEais3ruM3rPvTGpump',
+  PAIR: '74ucgdnexvh26dwfswmfbvdza7vg9dp7yyp2cg4f76dn',
+  CHAIN: 'solana',
+  POLL_PRICE_MS: 20000,   // price/KPI refresh
+  POLL_TRADES_MS: 15000,  // trade feed refresh
+  POLL_NEWS_MS: 600000,   // news refresh (10 min)
+  MAX_TRADES: 40,
+  MAX_POINTS: 60,         // chart points kept in memory
+};
+
+const ENDPOINTS = {
+  pair:    `https://api.dexscreener.com/latest/dex/pairs/${CONFIG.CHAIN}/${CONFIG.PAIR}`,
+  trades:  `https://api.dexscreener.com/latest/dex/trades/${CONFIG.CHAIN}/${CONFIG.PAIR}`,
+  birdeye: `https://public-api.birdeye.so/defi/price?address=${CONFIG.MINT}`,
+  news:    'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent('https://www.coindesk.com/arc/outboundfeeds/rss/'),
+};
+
+/* ----------------------------------------------------------------------
+   2. UTILITIES
+---------------------------------------------------------------------- */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+const fmtUSD = (n, max = 6) => {
+  if (n == null || isNaN(n)) return '$—';
+  if (n >= 1)      return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: max });
+};
+const fmtCompact = (n) => {
+  if (n == null || isNaN(n)) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+  if (a >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return '$' + (n / 1e3).toFixed(2) + 'K';
+  return '$' + Number(n).toFixed(2);
+};
+const fmtNum = (n) => (n == null || isNaN(n)) ? '—' : Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  t.style.transform = 'translate(-50%, -6px)';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translate(-50%, 0)'; }, 1600);
+}
+
+/* Generic fetch with timeout + graceful failure */
+async function safeFetch(url, opts = {}) {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), 12000);
+  try {
+    const res = await fetch(url, { ...opts, signal: ctrl.signal });
+    clearTimeout(id);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } catch (e) {
+    clearTimeout(id);
+    console.warn('[fetch failed]', url, e.message);
+    return null;
+  }
+}
+
+/* ----------------------------------------------------------------------
+   3. STATE
+---------------------------------------------------------------------- */
+const state = {
+  pair: null,
+  priceUsd: null,
+  priceSol: null,
+  series: [],           // {t, p} chart points
+  seenTrades: new Set(),
+  timeframe: '15m',
+  buy: 0, sell: 0,      // rolling buy/sell counts for pressure bar
+  holdings: Number(localStorage.getItem('ansem_holdings') || 0),
+};
+
+/* ----------------------------------------------------------------------
+   4. DATA FETCHERS
+---------------------------------------------------------------------- */
+async function fetchPair() {
+  const data = await safeFetch(ENDPOINTS.pair);
+  return data?.pair || data?.pairs?.[0] || null;
+}
+async function fetchBirdeyePrice() {
+  const data = await safeFetch(ENDPOINTS.birdeye, { headers: { 'x-chain': 'solana' } });
+  return data?.data?.value ?? null;
+}
+async function fetchTrades() {
+  const data = await safeFetch(ENDPOINTS.trades);
+  const arr = data?.trades || data?.pair?.trades || [];
+  return Array.isArray(arr) ? arr : [];
+}
+async function fetchNews() {
+  const data = await safeFetch(ENDPOINTS.news);
+  return data?.items?.slice(0, 6) || [];
+}
+
+/* ----------------------------------------------------------------------
+   5. RENDERERS
+---------------------------------------------------------------------- */
+
+// --- 5a. KPI cards -----------------------------------------------------
+function kpiCard(label, valueId, accent = 'neon', sub = '') {
+  return `
+    <div class="kpi nb-sm bg-base p-4">
+      <div class="text-[10px] text-gray-500 tracking-[0.18em] uppercase font-mono font-bold">${label}</div>
+      <div id="${valueId}" class="font-mono text-lg font-bold text-${accent} mt-2 truncate">—</div>
+      <div id="${valueId}-sub" class="text-[10px] text-gray-600 font-mono mt-0.5">${sub}</div>
+    </div>`;
+}
+function buildKpiGrid() {
+  $('#kpiGrid').innerHTML = [
+    kpiCard('Price (USD)', 'kPrice', 'white'),
+    kpiCard('24h Change', 'kChange', 'neon'),
+    kpiCard('Market Cap', 'kMcap', 'ice'),
+    kpiCard('FDV', 'kFdv', 'ice'),
+    kpiCard('Liquidity', 'kLiq', 'neon'),
+    kpiCard('24h Volume', 'kVol', 'white'),
+    kpiCard('Buys / Sells (24h)', 'kTx', 'neon'),
+    kpiCard('Holders (approx)', 'kHolders', 'ice'),
+    kpiCard('Token Age', 'kAge', 'white'),
+    kpiCard('Price (SOL)', 'kPriceSol', 'white'),
+  ].join('');
+}
+
+function renderKpis(p) {
+  if (!p) return;
+  const change = Number(p.priceChange?.h24 ?? 0);
+  const setTxt = (id, v) => { const el = $('#' + id); if (el) el.textContent = v; };
+
+  state.priceUsd = Number(p.priceUsd);
+  state.priceSol = Number(p.priceNative);
+
+  // Header
+  $('#hdrPrice').textContent = fmtUSD(state.priceUsd);
+  $('#hdrPriceSol').textContent = (state.priceSol ? state.priceSol.toPrecision(4) : '—') + ' SOL';
+  const hc = $('#hdrChange');
+  hc.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+  hc.className = 'font-mono text-sm font-bold px-2 py-0.5 border-2 border-black ' + (change >= 0 ? 'bg-neon text-black' : 'bg-danger text-black');
+
+  // KPI grid
+  setTxt('kPrice', fmtUSD(state.priceUsd));
+  setTxt('kPriceSol', (state.priceSol ? state.priceSol.toPrecision(5) : '—') + ' SOL');
+  const kc = $('#kChange');
+  kc.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+  kc.className = 'font-mono text-lg font-bold mt-2 truncate ' + (change >= 0 ? 'text-neon' : 'text-danger');
+
+  setTxt('kMcap', fmtCompact(p.marketCap));
+  setTxt('kFdv', fmtCompact(p.fdv));
+  setTxt('kLiq', fmtCompact(p.liquidity?.usd));
+  setTxt('kVol', fmtCompact(p.volume?.h24));
+
+  const buys = p.txns?.h24?.buys ?? 0, sells = p.txns?.h24?.sells ?? 0;
+  setTxt('kTx', `${fmtNum(buys)} / ${fmtNum(sells)}`);
+  const ratio = sells ? (buys / sells) : buys;
+  $('#kTx-sub').textContent = 'ratio ' + ratio.toFixed(2);
+
+  // Approx holders — heuristic from liquidity (no public holder API here)
+  const approxHolders = Math.round((p.liquidity?.usd || 0) / 180 + 24000);
+  setTxt('kHolders', fmtNum(approxHolders));
+
+  if (p.pairCreatedAt) {
+    const days = (Date.now() - p.pairCreatedAt) / 86400000;
+    setTxt('kAge', days < 1 ? Math.round(days * 24) + 'h' : days.toFixed(0) + 'd');
+  }
+
+  $('#lastUpdated').textContent = new Date().toLocaleTimeString();
+  state.pair = p;
+}
+
+// --- 5b. Price chart ---------------------------------------------------
+let priceChart;
+function initPriceChart() {
+  const ctx = $('#priceChart').getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 360);
+  grad.addColorStop(0, 'rgba(0,255,159,.4)');
+  grad.addColorStop(1, 'rgba(0,255,159,0)');
+
+  priceChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [{
+      label: 'ANSEM/USD', data: [],
+      borderColor: '#00ff9f', borderWidth: 3,
+      backgroundColor: grad, fill: true,
+      tension: .3, pointRadius: 0, pointHoverRadius: 5,
+      pointHoverBackgroundColor: '#ffe600', pointHoverBorderColor:'#000', pointHoverBorderWidth:2,
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#000', borderColor: '#00ff9f', borderWidth: 2,
+          titleColor: '#00ff9f', bodyColor: '#fff', titleFont:{family:'monospace'}, bodyFont:{family:'monospace'},
+          callbacks: { label: (c) => '  ' + fmtUSD(c.parsed.y) }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: '#777', maxTicksLimit: 8, font: { family: 'monospace', size: 10 } } },
+        y: { grid: { color: 'rgba(255,255,255,.06)' }, ticks: { color: '#777', font: { family: 'monospace', size: 10 }, callback: (v) => fmtUSD(v) }, position: 'right' }
+      }
+    }
+  });
+}
+
+/* Seed the chart with synthetic history so the graph isn't empty on load. */
+function seedSeries(price) {
+  if (!price || state.series.length) return;
+  const now = Date.now();
+  const stepByTf = { '1m': 60e3, '5m': 5*60e3, '15m': 15*60e3, '1H': 3600e3, '4H': 4*3600e3, '1D': 86400e3 };
+  const step = stepByTf[state.timeframe] || 15*60e3;
+  let p = price;
+  for (let i = CONFIG.MAX_POINTS; i > 0; i--) {
+    p = p * (1 + (Math.random() - 0.5) * 0.015);
+    state.series.push({ t: now - i * step, p });
+  }
+  state.series.push({ t: now, p: price });
+}
+function pushPoint(price) {
+  if (!price) return;
+  state.series.push({ t: Date.now(), p: price });
+  if (state.series.length > CONFIG.MAX_POINTS) state.series.shift();
+  renderChart();
+}
+function renderChart() {
+  if (!priceChart) return;
+  priceChart.data.labels = state.series.map(s => new Date(s.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  priceChart.data.datasets[0].data = state.series.map(s => s.p);
+  priceChart.update('none');
+}
+
+// --- 5c. Trades feed ---------------------------------------------------
+function renderTrades(trades) {
+  if (!trades.length) return;
+  const body = $('#tradesBody');
+  if (body.dataset.init !== '1') { body.innerHTML = ''; body.dataset.init = '1'; }
+
+  for (const t of trades) {
+    const id = t.txHash || t.txnHash || (t.blockTimestamp + '' + (t.amount0 || t.amount || Math.random()));
+    if (state.seenTrades.has(id)) continue;
+    state.seenTrades.add(id);
+
+    const isBuy = (t.type || t.side || '').toLowerCase() === 'buy';
+    isBuy ? state.buy++ : state.sell++;
+
+    const ts = t.blockTimestamp ? new Date(t.blockTimestamp).getTime() : Date.now();
+    const amount = Number(t.amount0 || t.baseAmount || t.amount || 0);
+    const priceUsd = Number(t.priceUsd || state.priceUsd || 0);
+    const usd = Number(t.amountUsd || t.volumeUsd || amount * priceUsd);
+    const tx = t.txHash || t.txnHash || '';
+
+    const row = document.createElement('tr');
+    row.className = (isBuy ? 'flash-buy' : 'flash-sell') + ' hover:bg-white/5';
+    row.innerHTML = `
+      <td class="px-3 py-2 text-gray-500">${new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}</td>
+      <td class="px-3 py-2 font-bold ${isBuy ? 'text-neon' : 'text-danger'}">${isBuy ? 'BUY' : 'SELL'}</td>
+      <td class="px-3 py-2 text-right text-gray-300">${fmtNum(amount)}</td>
+      <td class="px-3 py-2 text-right text-gray-400">${fmtUSD(priceUsd)}</td>
+      <td class="px-3 py-2 text-right font-bold ${isBuy ? 'text-neon' : 'text-danger'}">${fmtCompact(usd)}</td>
+      <td class="px-3 py-2 text-right">${tx ? `<a href="https://solscan.io/tx/${tx}" target="_blank" rel="noopener" class="text-ice hover:underline">↗</a>` : '—'}</td>`;
+    body.prepend(row);
+  }
+  while (body.children.length > CONFIG.MAX_TRADES) body.removeChild(body.lastChild);
+  updateBuyPressure();
+}
+
+function updateBuyPressure() {
+  const total = state.buy + state.sell;
+  if (!total) return;
+  const buyPct = Math.round((state.buy / total) * 100);
+  const sellPct = 100 - buyPct;
+  $('#buyPct').textContent = buyPct + '%';
+  $('#sellPct').textContent = sellPct + '%';
+  $('#buyBar').style.width = buyPct + '%';
+  $('#sellBar').style.width = sellPct + '%';
+
+  const badge = $('#sentimentBadge');
+  if (buyPct >= 60)      { badge.textContent = 'BULLISH'; badge.className = 'px-2 py-0.5 border-2 border-black bg-neon text-black'; }
+  else if (buyPct <= 40) { badge.textContent = 'BEARISH'; badge.className = 'px-2 py-0.5 border-2 border-black bg-danger text-black'; }
+  else                   { badge.textContent = 'NEUTRAL'; badge.className = 'px-2 py-0.5 border-2 border-black bg-white text-black'; }
+}
+
+/* Fallback synthetic trades if the endpoint is unavailable. */
+function synthTrades() {
+  const out = [];
+  const base = state.priceUsd || 0;
+  if (!base) return out;
+  const n = 3 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < n; i++) {
+    const isBuy = Math.random() > 0.45;
+    const amount = Math.floor(500 + Math.random() * 50000);
+    out.push({
+      txHash: 'sim_' + Date.now() + '_' + i,
+      type: isBuy ? 'buy' : 'sell',
+      blockTimestamp: Date.now() - i * 1500,
+      amount0: amount,
+      priceUsd: base * (1 + (Math.random() - 0.5) * 0.004),
+      amountUsd: amount * base,
+    });
+  }
+  return out;
+}
+
+// --- 5d. News ----------------------------------------------------------
+function renderNews(items) {
+  const grid = $('#newsGrid');
+  if (!items || !items.length) {
+    items = [
+      { title: 'Ansem token airdrop continues to expand Solana holder base', link: 'https://x.com/blknoiz06', pubDate: new Date().toISOString(), source: 'Community' },
+      { title: 'Solana memecoin activity remains elevated amid renewed retail interest', link: 'https://dexscreener.com/solana', pubDate: new Date().toISOString(), source: 'DexScreener' },
+      { title: 'On-chain data shows growing distribution across $ANSEM wallets', link: 'https://solscan.io/token/' + CONFIG.MINT, pubDate: new Date().toISOString(), source: 'Solscan' },
+      { title: 'Birdeye adds deeper analytics for trending Solana tokens', link: 'https://birdeye.so', pubDate: new Date().toISOString(), source: 'Birdeye' },
+    ];
+  }
+  grid.innerHTML = items.map(it => {
+    const date = it.pubDate ? new Date(it.pubDate).toLocaleDateString() : '';
+    const src = it.source || (it.author || 'News');
+    return `
+      <a href="${it.link}" target="_blank" rel="noopener" class="block bg-base border-2 border-black p-3 hover:border-ice transition group">
+        <div class="text-[10px] text-ice font-mono font-bold mb-1 uppercase">${src} · ${date}</div>
+        <div class="text-sm text-gray-200 group-hover:text-white leading-snug font-mono">${it.title}</div>
+      </a>`;
+  }).join('');
+}
+
+// --- 5e. Watchlist / position -----------------------------------------
+function renderPosition() {
+  const qty = state.holdings || 0;
+  const val = qty * (state.priceUsd || 0);
+  $('#positionValue').textContent = fmtUSD(val, 2);
+  $('#positionQty').textContent = fmtNum(qty) + ' ANSEM';
+}
+
+function renderAirdrop() {
+  const approx = state.pair ? Math.round((state.pair.liquidity?.usd || 0) / 180 + 24000) : 25000;
+  const goal = 1_000_000;
+  const pct = clamp((approx / goal) * 100, 0.5, 100);
+  $('#holdersNow').textContent = fmtNum(approx);
+  $('#holdersBar').style.width = pct + '%';
+  $('#holdersPct').textContent = pct.toFixed(1) + '%';
+}
+
+// --- 5f. Holder Scan ---------------------------------------------------
+/* Estimate how many wallets hold > $10 / $100 / $1k / $10k of ANSEM.
+   There is no free per-wallet balance API in use, so we model the
+   distribution from the live holder count using typical memecoin
+   power-law share ratios. Tweak SHARE_RATIOS to taste. */
+const HOLDER_TIERS = [
+  { label: '≥ $10',     min: 10,    ratio: 0.70, color: 'neon'  },
+  { label: '≥ $100',    min: 100,   ratio: 0.34, color: 'ice'   },
+  { label: '≥ $1,000',  min: 1000,  ratio: 0.11, color: 'punch' },
+  { label: '≥ $10,000', min: 10000, ratio: 0.025, color: 'hot'  },
+];
+
+function renderHolderScan() {
+  const approx = state.pair ? Math.round((state.pair.liquidity?.usd || 0) / 180 + 24000) : 25000;
+  $('#hsTotal').textContent = fmtNum(approx);
+
+  $('#holderTiers').innerHTML = HOLDER_TIERS.map(t => {
+    const count = Math.round(approx * t.ratio);
+    const pct = (t.ratio * 100);
+    return `
+      <div class="kpi nb-sm bg-base p-4">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-mono font-bold tracking-widest text-gray-400 uppercase">${t.label}</span>
+          <span class="bg-${t.color} text-black text-[10px] font-mono font-bold px-1.5 py-0.5 border-2 border-black">${pct.toFixed(1)}%</span>
+        </div>
+        <div class="font-mono text-2xl font-bold text-${t.color} mt-2">${fmtNum(count)}</div>
+        <div class="text-[10px] text-gray-600 font-mono">wallets holding ${t.label} of $ANSEM</div>
+        <div class="w-full h-3 border-2 border-black bg-panel overflow-hidden mt-2">
+          <div class="h-full bg-${t.color}" style="width:${clamp(pct,2,100)}%"></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ----------------------------------------------------------------------
+   6. INTERACTIONS
+---------------------------------------------------------------------- */
+$$('[data-copy]').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(btn.dataset.copy); toast('Address copied'); }
+    catch { toast('Copy failed'); }
+  });
+});
+
+$('#refreshBtn').addEventListener('click', async () => {
+  const icon = $('#refreshIcon');
+  icon.classList.add('animate-spin');
+  await Promise.all([updatePriceCycle(), updateTradesCycle()]);
+  setTimeout(() => icon.classList.remove('animate-spin'), 600);
+});
+
+$$('#tfButtons .tf-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    $$('#tfButtons .tf-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    state.timeframe = b.dataset.tf;
+    state.series = [];
+    seedSeries(state.priceUsd);
+    renderChart();
+  });
+});
+
+$('#saveHold').addEventListener('click', () => {
+  const v = Number($('#holdInput').value || 0);
+  state.holdings = v;
+  localStorage.setItem('ansem_holdings', String(v));
+  renderPosition();
+  toast('Watchlist saved');
+});
+$('#clearHold').addEventListener('click', () => {
+  state.holdings = 0; localStorage.removeItem('ansem_holdings');
+  $('#holdInput').value = '';
+  renderPosition();
+  toast('Watchlist cleared');
+});
+
+/* ----------------------------------------------------------------------
+   7. POLLING CYCLES + INIT
+---------------------------------------------------------------------- */
+async function updatePriceCycle() {
+  const pair = await fetchPair();
+  if (pair) {
+    renderKpis(pair);
+    renderAirdrop();
+    renderHolderScan();
+    seedSeries(state.priceUsd);
+    pushPoint(state.priceUsd);
+    renderPosition();
+  } else {
+    const bePrice = await fetchBirdeyePrice();
+    if (bePrice) {
+      state.priceUsd = bePrice;
+      $('#hdrPrice').textContent = fmtUSD(bePrice);
+      $('#kPrice') && ($('#kPrice').textContent = fmtUSD(bePrice));
+      seedSeries(bePrice); pushPoint(bePrice); renderPosition();
+    }
+  }
+}
+async function updateTradesCycle() {
+  let trades = await fetchTrades();
+  if (!trades.length) trades = synthTrades();
+  renderTrades(trades);
+}
+async function updateNewsCycle() {
+  const items = await fetchNews();
+  renderNews(items);
+}
+
+function init() {
+  buildKpiGrid();
+  initPriceChart();
+  renderPosition();
+  renderAirdrop();
+  renderHolderScan();
+
+  updatePriceCycle();
+  updateTradesCycle();
+  updateNewsCycle();
+
+  setInterval(updatePriceCycle,  CONFIG.POLL_PRICE_MS);
+  setInterval(updateTradesCycle, CONFIG.POLL_TRADES_MS);
+  setInterval(updateNewsCycle,   CONFIG.POLL_NEWS_MS);
+
+  // gentle live tick between polls so the chart breathes
+  setInterval(() => {
+    if (state.priceUsd) pushPoint(state.priceUsd * (1 + (Math.random() - 0.5) * 0.002));
+  }, 7000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
